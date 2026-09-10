@@ -408,6 +408,121 @@
       margin:0;
     }
   }
+
+  /* ---------- 사용법 안내 ---------- */
+  .guide-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 14px;
+    border-radius:6px;
+    border:1px solid var(--accent);
+    background:#fff;
+    color:var(--accent-dark);
+    font-weight:700;
+    font-size:13px;
+    font-family:inherit;
+    cursor:pointer;
+    margin-bottom:16px;
+  }
+  .guide-btn:hover{background:#f0f6f3;}
+
+  .guide-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(20,25,22,0.55);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+    padding:24px;
+  }
+  .guide-overlay.open{display:flex;}
+  .guide-modal{
+    background:#fff;
+    width:100%;
+    max-width:640px;
+    max-height:88vh;
+    overflow-y:auto;
+    border-radius:12px;
+    padding:28px 30px 32px;
+    position:relative;
+    box-shadow:0 12px 40px rgba(0,0,0,0.28);
+  }
+  .guide-close{
+    position:absolute;
+    top:16px;
+    right:16px;
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    border:none;
+    background:#f0f1ef;
+    color:#555;
+    font-size:15px;
+    cursor:pointer;
+  }
+  .guide-close:hover{background:#e3e5e2;}
+  .guide-modal h2{
+    margin:0 0 4px;
+    font-size:20px;
+    color:var(--accent-dark);
+  }
+  .guide-modal .guide-sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin:0 0 20px;
+  }
+  .guide-step{
+    display:flex;
+    gap:12px;
+    margin-bottom:18px;
+  }
+  .guide-step .num{
+    flex:0 0 auto;
+    width:26px;
+    height:26px;
+    border-radius:50%;
+    background:var(--accent);
+    color:#fff;
+    font-size:13px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .guide-step .body h3{
+    margin:2px 0 4px;
+    font-size:14.5px;
+    color:var(--ink);
+  }
+  .guide-step .body p{
+    margin:0;
+    font-size:13px;
+    line-height:1.6;
+    color:#3f473f;
+  }
+  .guide-step .body ul{
+    margin:6px 0 0;
+    padding-left:18px;
+    font-size:13px;
+    line-height:1.6;
+    color:#3f473f;
+  }
+  .guide-tip{
+    background:#f4f8f6;
+    border:1px solid #d7e4de;
+    border-radius:8px;
+    padding:12px 14px;
+    font-size:12.5px;
+    line-height:1.6;
+    color:#3d5148;
+    margin-top:6px;
+  }
+
+  @media print{
+    .guide-btn, .guide-overlay{display:none !important;}
+  }
 </style>
 </head>
 <body>
@@ -418,6 +533,8 @@
   <aside class="panel">
     <h1>카드사용확인서 만들기</h1>
     <p class="sub">정보를 입력하고 영수증 사진을 붙여넣으면 오른쪽에 학교 서식 그대로 문서가 완성돼요. 완성되면 인쇄 버튼 한 번으로 출력하거나 PDF로 저장할 수 있어요.</p>
+
+    <button type="button" class="guide-btn" id="guideBtn">❓ 사용법 보기</button>
 
     <div class="field">
       <label>학교</label>
@@ -522,6 +639,63 @@
 </div>
 
 <img id="printSnapshot" alt="카드사용확인서 인쇄 미리보기">
+
+<div class="guide-overlay" id="guideOverlay">
+  <div class="guide-modal">
+    <button class="guide-close" id="guideClose" title="닫기">✕</button>
+    <h2>카드사용확인서 사용법</h2>
+    <p class="guide-sub">처음 쓰시는 선생님도 아래 순서만 따라 하시면 바로 인쇄까지 끝낼 수 있어요.</p>
+
+    <div class="guide-step">
+      <div class="num">1</div>
+      <div class="body">
+        <h3>학교와 기본 정보 입력하기</h3>
+        <p>왼쪽에서 학교(여자고등학교/중학교)를 고르고, 부서·성명·내용·카드번호·사용기간·사용금액을 입력하세요. 입력하는 즉시 오른쪽 문서에 바로 반영돼요. 사용금액은 숫자만 입력해도 자동으로 쉼표(1,000원 단위)가 붙어요.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="num">2</div>
+      <div class="body">
+        <h3>영수증 사진 붙이기 (3가지 방법 중 편한 걸로)</h3>
+        <ul>
+          <li>오른쪽 문서의 영수증 부착란을 <b>클릭</b>하면 파일 선택창이 열려요.</li>
+          <li>영수증을 캡쳐/복사한 뒤 <b>Ctrl+V</b>(맥은 ⌘+V)로 바로 붙여넣을 수 있어요.</li>
+          <li>사진 파일을 마우스로 <b>끌어다 놓아도</b> 돼요.</li>
+        </ul>
+        <p>여러 장도 계속 추가할 수 있고, "영수증첨부 ○장"은 자동으로 계산돼요.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="num">3</div>
+      <div class="body">
+        <h3>영수증 위치·크기 조절하기</h3>
+        <p>붙인 영수증은 마우스로 눌러서 끌면 자유롭게 위치를 옮길 수 있고, 오른쪽 아래 모서리를 끌면 크기를 줄이거나 늘릴 수 있어요. 필요 없는 영수증은 오른쪽 위 ✕ 버튼으로 지우면 돼요.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="num">4</div>
+      <div class="body">
+        <h3>인쇄 또는 PDF로 저장하기</h3>
+        <p>오른쪽 위 <b>"🖨 인쇄 / PDF 저장"</b> 버튼을 누르면 잠깐 이미지를 준비한 뒤 인쇄창이 열려요. 별도 설정 없이 A4 한 장에 딱 맞게 인쇄돼요. 인쇄창에서 프린터 대신 "PDF로 저장"을 선택하면 파일로도 저장할 수 있어요.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="num">5</div>
+      <div class="body">
+        <h3>다시 작성하고 싶을 때</h3>
+        <p>오른쪽 위 <b>"초기화"</b> 버튼을 누르면 입력한 내용과 붙인 영수증이 모두 지워지고 새로 작성할 수 있어요.</p>
+      </div>
+    </div>
+
+    <div class="guide-tip">
+      💡 <b>팁</b> — 영수증 사진은 최대한 선명하게(흔들리지 않게) 찍어서 붙이시면 인쇄했을 때 글자가 더 또렷하게 나와요.
+    </div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -742,6 +916,17 @@
     $('pv-amount').textContent = '';
     images = [];
     renderImages();
+  });
+
+  // 사용법 안내 모달
+  const guideOverlay = $('guideOverlay');
+  $('guideBtn').addEventListener('click', () => guideOverlay.classList.add('open'));
+  $('guideClose').addEventListener('click', () => guideOverlay.classList.remove('open'));
+  guideOverlay.addEventListener('click', (e) => {
+    if(e.target === guideOverlay) guideOverlay.classList.remove('open');
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') guideOverlay.classList.remove('open');
   });
 
   renderImages();
