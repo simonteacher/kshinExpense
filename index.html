@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no, url=no">
+<title>카드사용확인서 자동작성</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1c1c;
+    --paper:#ffffff;
+    --panel-bg:#eef1f0;
+    --panel-line:#d3d9d6;
+    --accent:#2f5d4f;
+    --accent-dark:#234438;
+    --danger:#a4402f;
+    --muted:#6b756f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'굴림','Gulim','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    background:var(--panel-bg);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .app{
+    display:flex;
+    min-height:100vh;
+    align-items:flex-start;
+  }
+
+  /* ---------- 왼쪽 입력 패널 ---------- */
+  .panel{
+    width:340px;
+    flex:0 0 340px;
+    background:var(--paper);
+    border-right:1px solid var(--panel-line);
+    padding:28px 24px 60px;
+    min-height:100vh;
+  }
+  .panel h1{
+    font-size:19px;
+    margin:0 0 4px;
+    letter-spacing:-0.02em;
+  }
+  .panel .sub{
+    font-size:12.5px;
+    color:var(--muted);
+    line-height:1.5;
+    margin:0 0 22px;
+  }
+  .field{
+    margin-bottom:14px;
+  }
+  .field label{
+    display:block;
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--accent-dark);
+    margin-bottom:5px;
+  }
+  .field input, .field textarea, .field select{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid #c8cfcb;
+    border-radius:5px;
+    font-size:13.5px;
+    font-family:inherit;
+    color:var(--ink);
+    background:#fbfcfb;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus{
+    outline:none;
+    border-color:var(--accent);
+    background:#fff;
+  }
+  .field textarea{
+    resize:vertical;
+    min-height:52px;
+  }
+  .row2{
+    display:flex;
+    gap:10px;
+  }
+  .row2 .field{flex:1;}
+
+  .divider{
+    border:none;
+    border-top:1px dashed var(--panel-line);
+    margin:20px 0 16px;
+  }
+
+  .hint-box{
+    background:#f4f8f6;
+    border:1px solid #d7e4de;
+    border-radius:8px;
+    padding:12px 13px;
+    font-size:12px;
+    line-height:1.6;
+    color:#3d5148;
+    margin-bottom:16px;
+  }
+  .hint-box b{color:var(--accent-dark);}
+
+  .add-photo-btn{
+    width:100%;
+    padding:10px;
+    border-radius:6px;
+    border:1px solid var(--accent);
+    background:#fff;
+    color:var(--accent-dark);
+    font-weight:700;
+    font-size:13px;
+    cursor:pointer;
+    margin-bottom:8px;
+  }
+  .add-photo-btn:hover{background:#f0f6f3;}
+
+  .count-line{
+    font-size:12px;
+    color:var(--muted);
+    text-align:center;
+  }
+
+  /* ---------- 오른쪽 미리보기 ---------- */
+  .preview-wrap{
+    flex:1;
+    padding:36px 32px 80px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .toolbar{
+    width:210mm;
+    max-width:100%;
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .btn{
+    padding:9px 18px;
+    border-radius:6px;
+    font-size:13.5px;
+    font-weight:700;
+    cursor:pointer;
+    border:1px solid transparent;
+  }
+  .btn-print{
+    background:var(--accent);
+    color:#fff;
+  }
+  .btn-print:hover{background:var(--accent-dark);}
+  .btn-reset{
+    background:#fff;
+    border:1px solid #c8cfcb;
+    color:var(--muted);
+  }
+  .btn-reset:hover{border-color:var(--danger);color:var(--danger);}
+
+  .document{
+    width:210mm;
+    max-width:100%;
+    min-height:297mm;
+    background:#fff;
+    box-shadow:0 2px 18px rgba(0,0,0,0.14);
+    padding:18mm 16mm 14mm;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  .doc-table, .doc-title, .doc-footer{
+    flex:0 0 auto;
+  }
+  .document a,
+  .document a *,
+  .document [class*="data-detector"],
+  .document [class*="data-detector"] *{
+    color:inherit !important;
+    text-decoration:none !important;
+    background:none !important;
+  }
+  .doc-title{
+    text-align:center;
+    font-size:26px;
+    letter-spacing:0.15em;
+    margin:0 0 22px;
+    font-weight:700;
+    color:#000;
+  }
+  table.doc-table{
+    width:100%;
+    border-collapse:collapse;
+    border:1.6px solid #000;
+    font-size:14px;
+  }
+  table.doc-table td{
+    border:1px solid #000;
+    padding:9px 10px;
+    vertical-align:middle;
+  }
+  table.doc-table td.label-cell{
+    width:25%;
+    text-align:center;
+    letter-spacing:0.25em;
+    font-weight:600;
+    background:#fff;
+  }
+  table.doc-table td.value-cell{
+    width:25%;
+    text-align:center;
+  }
+  table.doc-table td.value-cell.align-right{
+    text-align:right;
+  }
+  table.doc-table td.label-cell.label-left{
+    text-align:left;
+  }
+  table.doc-table td.value-cell[contenteditable="true"]:empty::before{
+    content:attr(data-placeholder);
+    color:#b7b7b7;
+  }
+  .content-row{
+    white-space:pre-wrap;
+    line-height:1.6;
+    text-align:left;
+  }
+  .content-label-text{
+    letter-spacing:0.25em;
+    font-weight:600;
+    margin-right:8px;
+  }
+  table.doc-table td.label-cell.tight{
+    letter-spacing:0;
+    font-size:12px;
+    white-space:nowrap;
+    padding-left:4px;
+    padding-right:4px;
+  }
+  .unit-suffix{
+    color:#555;
+    margin-left:6px;
+    font-size:13px;
+  }
+
+  .receipt-zone{
+    margin-top:0;
+    border:1.6px solid #000;
+    border-top:none;
+    flex:1 1 auto;
+    min-height:175mm;
+    padding:10px 10px 14px;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  .receipt-grid{
+    position:relative;
+    flex:1 1 auto;
+  }
+  .receipt-item{
+    position:absolute;
+    border:1px solid #ccc;
+    background:#fafafa;
+    width:220px;
+    height:280px;
+    min-width:70px;
+    min-height:70px;
+    max-width:100%;
+    max-height:900px;
+    overflow:hidden;
+    resize:both;
+    cursor:move;
+    touch-action:none;
+    user-select:none;
+    page-break-inside:avoid;
+    break-inside:avoid;
+  }
+  .receipt-item.dragging{
+    opacity:0.85;
+    box-shadow:0 4px 14px rgba(0,0,0,0.22);
+    z-index:50;
+  }
+  .receipt-item img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+    pointer-events:none;
+  }
+  .receipt-item .remove-btn{
+    position:absolute;
+    top:4px;
+    right:4px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:rgba(30,30,30,0.72);
+    color:#fff;
+    border:none;
+    font-size:13px;
+    line-height:22px;
+    text-align:center;
+    cursor:pointer;
+    padding:0;
+    z-index:2;
+  }
+  .receipt-item .resize-hint{
+    position:absolute;
+    bottom:2px;
+    right:3px;
+    font-size:9px;
+    color:#aaa;
+    pointer-events:none;
+    letter-spacing:-1px;
+  }
+  .receipt-label-row{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    margin-bottom:10px;
+  }
+  .add-btn-inline{
+    flex:0 0 auto;
+    padding:5px 12px;
+    border-radius:5px;
+    border:1px solid var(--accent);
+    background:#fff;
+    color:var(--accent-dark);
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .add-btn-inline:hover{background:#f0f6f3;}
+  .receipt-empty{
+    border:1.5px dashed #c9c9c9;
+    border-radius:8px;
+    min-height:160px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:#9a9a9a;
+    font-size:13px;
+    line-height:1.7;
+    padding:20px;
+    cursor:pointer;
+  }
+  .receipt-empty:hover{
+    border-color:var(--accent);
+    color:var(--accent-dark);
+    background:#f7faf9;
+  }
+  .receipt-zone.drag-over .receipt-empty{
+    border-color:var(--accent);
+    background:#f0f6f3;
+    color:var(--accent-dark);
+  }
+
+  .doc-footer{
+    margin-top:14px;
+    font-size:13px;
+  }
+
+  @media print{
+    body{background:#fff;}
+    .panel, .toolbar, .remove-btn, .receipt-empty, .add-btn-inline, .resize-hint{display:none !important;}
+    .receipt-item{resize:none !important; border-color:#ddd;}
+    .preview-wrap{padding:0; display:block;}
+    .document{
+      box-shadow:none;
+      width:210mm;
+      height:297mm;
+      min-height:0;
+      max-height:297mm;
+      padding:14mm 16mm;
+      margin:0;
+      overflow:hidden;
+    }
+    .receipt-zone{overflow:hidden;}
+    /* 카카오톡/네이버 등 인앱 브라우저나 일부 모바일 브라우저가 텍스트를
+       전화번호·주소로 오인식해 파란색/주황색으로 바꾸는 것을 강제로 무효화 */
+    .document, .document *{
+      color:#000 !important;
+      background-color:transparent !important;
+      text-decoration:none !important;
+    }
+    @page{
+      size:A4;
+      margin:0;
+    }
+  }
+  @media (max-width:900px){
+    .app{flex-direction:column;}
+    .panel{width:100%;flex:none;border-right:none;border-bottom:1px solid var(--panel-line);}
+    .document{width:100%;min-height:auto;}
+  }
+
+  #printSnapshot{display:none;}
+  @media print{
+    body.print-mode .app{display:none !important;}
+    body.print-mode #printSnapshot{
+      display:block !important;
+      width:210mm;
+      height:297mm;
+      object-fit:contain;
+      margin:0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- 왼쪽 입력 패널 -->
+  <aside class="panel">
+    <h1>카드사용확인서 만들기</h1>
+    <p class="sub">정보를 입력하고 영수증 사진을 붙여넣으면 오른쪽에 학교 서식 그대로 문서가 완성돼요. 완성되면 인쇄 버튼 한 번으로 출력하거나 PDF로 저장할 수 있어요.</p>
+
+    <div class="field">
+      <label>학교</label>
+      <select id="schoolSelect">
+        <option value="광주경신여자고등학교">광주경신여자고등학교</option>
+        <option value="광주경신중학교">광주경신중학교</option>
+      </select>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>부서</label>
+        <input type="text" id="dept" placeholder="예: 교무부">
+      </div>
+      <div class="field">
+        <label>성명</label>
+        <input type="text" id="name" placeholder="예: 홍길동">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>내용</label>
+      <textarea id="content" placeholder="사용 내용을 입력하세요 (예: 학급 간식 구입)"></textarea>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>카드번호 (4자리)</label>
+        <input type="text" id="cardNo" maxlength="4" placeholder="0000">
+      </div>
+      <div class="field">
+        <label>사용기간</label>
+        <input type="text" id="period" placeholder="예: 9.1 ~ 9.10">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>사용금액</label>
+      <input type="text" id="amount" placeholder="예: 35,000">
+    </div>
+
+    <hr class="divider">
+
+    <div class="hint-box">
+      <b>영수증 붙여넣기</b><br>
+      캡쳐한 영수증 이미지를 복사한 뒤, 오른쪽 문서의 영수증 부착란을 클릭하고 <b>Ctrl+V</b>(맥 ⌘+V)를 누르면 바로 붙여넣어져요. 여러 장도 계속 붙여넣을 수 있어요.
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+    <button class="add-photo-btn" id="addPhotoBtn">📎 영수증 이미지 파일로 추가</button>
+    <div class="count-line">현재 첨부: <span id="countLabel">0</span>장 (자동 계산됨)</div>
+  </aside>
+
+  <!-- 오른쪽 미리보기 -->
+  <main class="preview-wrap">
+    <div class="toolbar">
+      <button class="btn btn-reset" id="resetBtn">초기화</button>
+      <button class="btn btn-print" id="printBtn">🖨 인쇄 / PDF 저장</button>
+    </div>
+
+    <div class="document" id="document">
+      <h2 class="doc-title">카드사용확인서</h2>
+
+      <table class="doc-table">
+        <tr>
+          <td class="label-cell">부&nbsp;&nbsp;서</td>
+          <td class="value-cell" id="pv-dept"></td>
+          <td class="label-cell">성&nbsp;&nbsp;명</td>
+          <td class="value-cell" id="pv-name"></td>
+        </tr>
+        <tr>
+          <td class="content-row" colspan="4"><span class="content-label-text">내용 :</span><span class="content-value-text" id="pv-content"></span></td>
+        </tr>
+        <tr>
+          <td class="label-cell label-left">카드번호(4자리)</td>
+          <td class="value-cell" id="pv-cardNo"></td>
+          <td class="label-cell">사&nbsp;용&nbsp;기&nbsp;간</td>
+          <td class="value-cell" id="pv-period"></td>
+        </tr>
+        <tr>
+          <td class="label-cell label-left">사&nbsp;용&nbsp;금&nbsp;액</td>
+          <td class="value-cell align-right" id="pv-amount"></td>
+          <td class="label-cell">영수증첨부</td>
+          <td class="value-cell" id="pv-count">0<span class="unit-suffix">장</span></td>
+        </tr>
+      </table>
+
+      <div class="receipt-zone" id="receiptZone">
+        <div class="receipt-label-row">
+          <button class="add-btn-inline" id="addInlineBtn">+ 이미지 추가</button>
+        </div>
+        <div class="receipt-grid" id="receiptGrid"></div>
+        <div class="receipt-empty" id="receiptEmpty">
+          클릭해서 파일 첨부<br>또는 Ctrl+V로 붙여넣기<br>또는 이미지를 끌어다 놓으세요
+        </div>
+      </div>
+
+      <div class="doc-footer" id="pv-school">광주경신여자고등학교</div>
+    </div>
+  </main>
+
+</div>
+
+<img id="printSnapshot" alt="카드사용확인서 인쇄 미리보기">
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+
+  const fields = ['dept','name','content','cardNo','period'];
+  fields.forEach(f => {
+    $(f).addEventListener('input', () => {
+      $('pv-' + f).textContent = $(f).value;
+    });
+  });
+
+  // 사용금액: 입력하는 동안 자동으로 천 단위 콤마를 붙여줌
+  $('amount').addEventListener('input', () => {
+    const digits = $('amount').value.replace(/[^0-9]/g, '');
+    const formatted = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    $('amount').value = formatted;
+    $('pv-amount').textContent = formatted;
+  });
+
+  $('schoolSelect').addEventListener('change', () => {
+    $('pv-school').textContent = $('schoolSelect').value;
+  });
+
+  let images = []; // {url}
+  const receiptGrid = $('receiptGrid');
+  const receiptEmpty = $('receiptEmpty');
+  const receiptZone = $('receiptZone');
+  const countLabel = $('countLabel');
+  const pvCount = $('pv-count');
+
+  function renderImages(){
+    receiptGrid.innerHTML = '';
+    images.forEach((img, idx) => {
+      const item = document.createElement('div');
+      item.className = 'receipt-item';
+      item.style.width = (img.w || 220) + 'px';
+      item.style.height = (img.h || 280) + 'px';
+      item.style.left = (img.x != null ? img.x : (idx % 4) * 26) + 'px';
+      item.style.top = (img.y != null ? img.y : (idx % 4) * 26) + 'px';
+
+      const im = document.createElement('img');
+      im.src = img.url;
+      im.draggable = false;
+
+      const rm = document.createElement('button');
+      rm.className = 'remove-btn';
+      rm.textContent = '✕';
+      rm.title = '삭제';
+      rm.addEventListener('pointerdown', (e) => e.stopPropagation());
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        images.splice(idx,1);
+        renderImages();
+      });
+
+      const hint = document.createElement('div');
+      hint.className = 'resize-hint';
+      hint.textContent = '⇲';
+
+      // 크기 조절(resize) 값을 기억해두기
+      const ro = new ResizeObserver(entries => {
+        for(const entry of entries){
+          img.w = Math.round(entry.contentRect.width);
+          img.h = Math.round(entry.contentRect.height);
+        }
+      });
+      ro.observe(item);
+
+      // 드래그로 위치 이동
+      let dragging = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
+      item.addEventListener('pointerdown', (e) => {
+        // 크기조절 핸들(우측 하단 모서리 약 16px)은 브라우저 기본 리사이즈에 맡기고 드래그 시작하지 않음
+        const rect = item.getBoundingClientRect();
+        const nearCorner = (rect.right - e.clientX < 18) && (rect.bottom - e.clientY < 18);
+        if(nearCorner) return;
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        baseLeft = item.offsetLeft;
+        baseTop = item.offsetTop;
+        item.classList.add('dragging');
+        item.setPointerCapture(e.pointerId);
+      });
+      item.addEventListener('pointermove', (e) => {
+        if(!dragging) return;
+        const newLeft = Math.max(0, baseLeft + (e.clientX - startX));
+        const newTop = Math.max(0, baseTop + (e.clientY - startY));
+        item.style.left = newLeft + 'px';
+        item.style.top = newTop + 'px';
+        img.x = newLeft;
+        img.y = newTop;
+      });
+      const endDrag = (e) => {
+        if(!dragging) return;
+        dragging = false;
+        item.classList.remove('dragging');
+      };
+      item.addEventListener('pointerup', endDrag);
+      item.addEventListener('pointercancel', endDrag);
+
+      item.appendChild(im);
+      item.appendChild(rm);
+      item.appendChild(hint);
+      receiptGrid.appendChild(item);
+    });
+
+    receiptEmpty.style.display = images.length === 0 ? 'flex' : 'none';
+    countLabel.textContent = images.length;
+    pvCount.innerHTML = images.length + '<span class="unit-suffix">장</span>';
+  }
+
+  function addFiles(fileList){
+    Array.from(fileList).forEach(file => {
+      if(!file.type.startsWith('image/')) return;
+      const url = URL.createObjectURL(file);
+      images.push({url});
+    });
+    renderImages();
+  }
+
+  // 붙여넣기 (문서 전체에서 감지, 포커스는 receiptZone 클릭으로 유도)
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    let found = false;
+    for(const item of items){
+      if(item.type.startsWith('image/')){
+        const file = item.getAsFile();
+        if(file){
+          const url = URL.createObjectURL(file);
+          images.push({url});
+          found = true;
+        }
+      }
+    }
+    if(found){ e.preventDefault(); renderImages(); }
+  });
+
+  receiptEmpty.addEventListener('click', () => $('fileInput').click());
+  $('addInlineBtn').addEventListener('click', () => $('fileInput').click());
+
+  // 파일 선택 버튼
+  $('addPhotoBtn').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', (e) => {
+    addFiles(e.target.files);
+    e.target.value = '';
+  });
+
+  // 드래그 앤 드롭
+  ['dragover','dragenter'].forEach(ev => {
+    receiptZone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      receiptZone.classList.add('drag-over');
+    });
+  });
+  ['dragleave','drop'].forEach(ev => {
+    receiptZone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      receiptZone.classList.remove('drag-over');
+    });
+  });
+  receiptZone.addEventListener('drop', (e) => {
+    if(e.dataTransfer && e.dataTransfer.files.length){
+      addFiles(e.dataTransfer.files);
+    }
+  });
+
+  $('printBtn').addEventListener('click', async () => {
+    const btn = $('printBtn');
+    const original = btn.textContent;
+    const docEl = $('document');
+    const snap = $('printSnapshot');
+
+    if(typeof html2canvas !== 'function'){
+      window.print();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '이미지 준비 중...';
+    try{
+      const canvas = await html2canvas(docEl, {
+        scale: 3,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        onclone: (clonedDoc) => {
+          clonedDoc.querySelectorAll('.remove-btn, .resize-hint, .add-btn-inline').forEach(el => el.remove());
+          const emptyEl = clonedDoc.getElementById('receiptEmpty');
+          if(emptyEl) emptyEl.remove();
+        }
+      });
+      const dataUrl = canvas.toDataURL('image/png');
+      await new Promise((resolve, reject) => {
+        snap.onload = resolve;
+        snap.onerror = reject;
+        snap.src = dataUrl;
+      });
+      document.body.classList.add('print-mode');
+      window.print();
+    }catch(err){
+      console.error('스냅샷 생성 실패, 일반 인쇄로 진행합니다', err);
+      window.print();
+    }finally{
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  window.addEventListener('afterprint', () => {
+    document.body.classList.remove('print-mode');
+  });
+
+  $('resetBtn').addEventListener('click', () => {
+    if(!confirm('입력한 내용과 붙여넣은 영수증을 모두 지울까요?')) return;
+    fields.forEach(f => { $(f).value=''; $('pv-'+f).textContent=''; });
+    $('amount').value = '';
+    $('pv-amount').textContent = '';
+    images = [];
+    renderImages();
+  });
+
+  renderImages();
+})();
+</script>
+
+</body>
+</html>
