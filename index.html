@@ -135,9 +135,38 @@
     width:210mm;
     max-width:100%;
     display:flex;
-    justify-content:flex-end;
-    gap:8px;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
     margin-bottom:14px;
+  }
+  .tabs{
+    display:flex;
+    gap:6px;
+  }
+  .tab-btn{
+    padding:9px 18px;
+    border-radius:6px;
+    border:1px solid #c8cfcb;
+    background:#fff;
+    color:var(--muted);
+    font-weight:700;
+    font-size:13.5px;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .tab-btn.active{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .toolbar-actions{
+    display:flex;
+    gap:8px;
+  }
+  .receipt-zone.item-zone{
+    border-top:1.6px solid #000 !important;
   }
   .btn{
     padding:9px 18px;
@@ -617,8 +646,14 @@
   <!-- 오른쪽 미리보기 -->
   <main class="preview-wrap">
     <div class="toolbar">
-      <button class="btn btn-reset" id="resetBtn">초기화</button>
-      <button class="btn btn-print" id="printBtn">🖨 인쇄 / PDF 저장</button>
+      <div class="tabs">
+        <button type="button" class="tab-btn active" id="tabCardBtn" data-tab="card">카드사용확인서</button>
+        <button type="button" class="tab-btn" id="tabItemBtn" data-tab="item">물품사진</button>
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn btn-reset" id="resetBtn">초기화</button>
+        <button class="btn btn-print" id="printBtn">🖨 인쇄 / PDF 저장</button>
+      </div>
     </div>
 
     <div class="document" id="document">
@@ -660,9 +695,24 @@
 
       <div class="doc-footer" id="pv-school">광주경신여자고등학교</div>
     </div>
+
+    <div class="document item-doc" id="itemDoc" style="display:none;">
+      <h2 class="doc-title">물품 사진</h2>
+      <div class="receipt-zone item-zone" id="itemZone">
+        <div class="receipt-label-row">
+          <button class="add-btn-inline" id="addInlineBtnItem">+ 사진 추가</button>
+        </div>
+        <div class="receipt-grid" id="itemGrid"></div>
+        <div class="receipt-empty" id="itemEmpty">
+          클릭해서 파일 첨부<br>또는 Ctrl+V로 붙여넣기<br>또는 이미지를 끌어다 놓으세요
+        </div>
+      </div>
+    </div>
   </main>
 
 </div>
+
+<input type="file" id="fileInputItem" accept="image/*" multiple style="display:none">
 
 <img id="printSnapshot" alt="카드사용확인서 인쇄 미리보기">
 
@@ -712,13 +762,21 @@
     <div class="guide-step">
       <div class="num">5</div>
       <div class="body">
+        <h3>물품사진도 함께 출력하고 싶다면</h3>
+        <p>화면 위쪽의 <b>"물품사진"</b> 탭을 누르면 별도 페이지가 나와요. 카드 영수증과 똑같은 방법(클릭/붙여넣기/드래그)으로 물품 사진을 넣고, 자유롭게 이동·크기 조절한 뒤 인쇄하면 돼요. "카드사용확인서" 탭으로 다시 돌아가면 원래 서식이 그대로 남아있어요.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="num">6</div>
+      <div class="body">
         <h3>다시 작성하고 싶을 때</h3>
-        <p>오른쪽 위 <b>"초기화"</b> 버튼을 누르면 입력한 내용과 붙인 영수증이 모두 지워지고 새로 작성할 수 있어요.</p>
+        <p>오른쪽 위 <b>"초기화"</b> 버튼을 누르면, 지금 보고 있는 탭의 내용만 지워져요. (카드사용확인서 탭이면 입력 내용+영수증, 물품사진 탭이면 물품 사진만)</p>
       </div>
     </div>
 
     <div class="guide-tip">
-      💡 <b>팁</b> — 영수증 사진은 최대한 선명하게(흔들리지 않게) 찍어서 붙이시면 인쇄했을 때 글자가 더 또렷하게 나와요.
+      💡 <b>팁</b> — 영수증·물품 사진 모두 최대한 선명하게(흔들리지 않게) 찍어서 붙이시면 인쇄했을 때 글자가 더 또렷하게 나와요.
     </div>
   </div>
 </div>
@@ -770,154 +828,211 @@
     $('pv-school').textContent = $('schoolSelect').value;
   });
 
-  let images = []; // {url}
+  // ---------- 이미지(영수증/물품사진) 관리 공통 로직 ----------
+  function createImageManager({ gridEl, emptyEl, onCountChange }){
+    let images = []; // {url, w, h, x, y}
+
+    function render(){
+      gridEl.innerHTML = '';
+      images.forEach((img, idx) => {
+        const item = document.createElement('div');
+        item.className = 'receipt-item';
+        item.style.width = (img.w || 220) + 'px';
+        item.style.height = (img.h || 280) + 'px';
+        item.style.left = (img.x != null ? img.x : (idx % 4) * 26) + 'px';
+        item.style.top = (img.y != null ? img.y : (idx % 4) * 26) + 'px';
+
+        const im = document.createElement('img');
+        im.src = img.url;
+        im.draggable = false;
+
+        const rm = document.createElement('button');
+        rm.className = 'remove-btn';
+        rm.textContent = '✕';
+        rm.title = '삭제';
+        rm.addEventListener('pointerdown', (e) => e.stopPropagation());
+        rm.addEventListener('click', (e) => {
+          e.stopPropagation();
+          images.splice(idx,1);
+          render();
+        });
+
+        const hint = document.createElement('div');
+        hint.className = 'resize-hint';
+        hint.textContent = '⇲';
+
+        // 크기 조절(resize) 값을 기억해두기
+        const ro = new ResizeObserver(entries => {
+          for(const entry of entries){
+            img.w = Math.round(entry.contentRect.width);
+            img.h = Math.round(entry.contentRect.height);
+          }
+        });
+        ro.observe(item);
+
+        // 드래그로 위치 이동
+        let dragging = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
+        item.addEventListener('pointerdown', (e) => {
+          const rect = item.getBoundingClientRect();
+          const nearCorner = (rect.right - e.clientX < 18) && (rect.bottom - e.clientY < 18);
+          if(nearCorner) return;
+          dragging = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          baseLeft = item.offsetLeft;
+          baseTop = item.offsetTop;
+          item.classList.add('dragging');
+          item.setPointerCapture(e.pointerId);
+        });
+        item.addEventListener('pointermove', (e) => {
+          if(!dragging) return;
+          const newLeft = Math.max(0, baseLeft + (e.clientX - startX));
+          const newTop = Math.max(0, baseTop + (e.clientY - startY));
+          item.style.left = newLeft + 'px';
+          item.style.top = newTop + 'px';
+          img.x = newLeft;
+          img.y = newTop;
+        });
+        const endDrag = () => {
+          if(!dragging) return;
+          dragging = false;
+          item.classList.remove('dragging');
+        };
+        item.addEventListener('pointerup', endDrag);
+        item.addEventListener('pointercancel', endDrag);
+
+        item.appendChild(im);
+        item.appendChild(rm);
+        item.appendChild(hint);
+        gridEl.appendChild(item);
+      });
+
+      emptyEl.style.display = images.length === 0 ? 'flex' : 'none';
+      if(typeof onCountChange === 'function') onCountChange(images.length);
+    }
+
+    function addFiles(fileList){
+      Array.from(fileList).forEach(file => {
+        if(!file.type.startsWith('image/')) return;
+        const url = URL.createObjectURL(file);
+        images.push({url});
+      });
+      render();
+    }
+
+    function addFromFile(file){
+      const url = URL.createObjectURL(file);
+      images.push({url});
+      render();
+    }
+
+    function reset(){
+      images = [];
+      render();
+    }
+
+    return { addFiles, addFromFile, render, reset, get length(){ return images.length; } };
+  }
+
   const receiptGrid = $('receiptGrid');
   const receiptEmpty = $('receiptEmpty');
   const receiptZone = $('receiptZone');
   const countLabel = $('countLabel');
   const pvCount = $('pv-count');
 
-  function renderImages(){
-    receiptGrid.innerHTML = '';
-    images.forEach((img, idx) => {
-      const item = document.createElement('div');
-      item.className = 'receipt-item';
-      item.style.width = (img.w || 220) + 'px';
-      item.style.height = (img.h || 280) + 'px';
-      item.style.left = (img.x != null ? img.x : (idx % 4) * 26) + 'px';
-      item.style.top = (img.y != null ? img.y : (idx % 4) * 26) + 'px';
+  const receiptManager = createImageManager({
+    gridEl: receiptGrid,
+    emptyEl: receiptEmpty,
+    onCountChange: (n) => {
+      countLabel.textContent = n;
+      pvCount.innerHTML = n + '<span class="unit-suffix">장</span>';
+    }
+  });
 
-      const im = document.createElement('img');
-      im.src = img.url;
-      im.draggable = false;
+  const itemGrid = $('itemGrid');
+  const itemEmpty = $('itemEmpty');
+  const itemZone = $('itemZone');
+  const itemManager = createImageManager({ gridEl: itemGrid, emptyEl: itemEmpty });
 
-      const rm = document.createElement('button');
-      rm.className = 'remove-btn';
-      rm.textContent = '✕';
-      rm.title = '삭제';
-      rm.addEventListener('pointerdown', (e) => e.stopPropagation());
-      rm.addEventListener('click', (e) => {
-        e.stopPropagation();
-        images.splice(idx,1);
-        renderImages();
-      });
+  // ---------- 탭 전환 (카드사용확인서 / 물품사진) ----------
+  let currentTab = 'card';
+  const cardDocEl = $('document');
+  const itemDocEl = $('itemDoc');
+  const tabCardBtn = $('tabCardBtn');
+  const tabItemBtn = $('tabItemBtn');
 
-      const hint = document.createElement('div');
-      hint.className = 'resize-hint';
-      hint.textContent = '⇲';
-
-      // 크기 조절(resize) 값을 기억해두기
-      const ro = new ResizeObserver(entries => {
-        for(const entry of entries){
-          img.w = Math.round(entry.contentRect.width);
-          img.h = Math.round(entry.contentRect.height);
-        }
-      });
-      ro.observe(item);
-
-      // 드래그로 위치 이동
-      let dragging = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
-      item.addEventListener('pointerdown', (e) => {
-        // 크기조절 핸들(우측 하단 모서리 약 16px)은 브라우저 기본 리사이즈에 맡기고 드래그 시작하지 않음
-        const rect = item.getBoundingClientRect();
-        const nearCorner = (rect.right - e.clientX < 18) && (rect.bottom - e.clientY < 18);
-        if(nearCorner) return;
-        dragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        baseLeft = item.offsetLeft;
-        baseTop = item.offsetTop;
-        item.classList.add('dragging');
-        item.setPointerCapture(e.pointerId);
-      });
-      item.addEventListener('pointermove', (e) => {
-        if(!dragging) return;
-        const newLeft = Math.max(0, baseLeft + (e.clientX - startX));
-        const newTop = Math.max(0, baseTop + (e.clientY - startY));
-        item.style.left = newLeft + 'px';
-        item.style.top = newTop + 'px';
-        img.x = newLeft;
-        img.y = newTop;
-      });
-      const endDrag = (e) => {
-        if(!dragging) return;
-        dragging = false;
-        item.classList.remove('dragging');
-      };
-      item.addEventListener('pointerup', endDrag);
-      item.addEventListener('pointercancel', endDrag);
-
-      item.appendChild(im);
-      item.appendChild(rm);
-      item.appendChild(hint);
-      receiptGrid.appendChild(item);
-    });
-
-    receiptEmpty.style.display = images.length === 0 ? 'flex' : 'none';
-    countLabel.textContent = images.length;
-    pvCount.innerHTML = images.length + '<span class="unit-suffix">장</span>';
+  function setTab(tab){
+    currentTab = tab;
+    tabCardBtn.classList.toggle('active', tab === 'card');
+    tabItemBtn.classList.toggle('active', tab === 'item');
+    cardDocEl.style.display = tab === 'card' ? '' : 'none';
+    itemDocEl.style.display = tab === 'item' ? '' : 'none';
   }
+  tabCardBtn.addEventListener('click', () => setTab('card'));
+  tabItemBtn.addEventListener('click', () => setTab('item'));
 
-  function addFiles(fileList){
-    Array.from(fileList).forEach(file => {
-      if(!file.type.startsWith('image/')) return;
-      const url = URL.createObjectURL(file);
-      images.push({url});
-    });
-    renderImages();
-  }
-
-  // 붙여넣기 (문서 전체에서 감지, 포커스는 receiptZone 클릭으로 유도)
+  // 붙여넣기 (문서 전체에서 감지, 현재 활성화된 탭에 붙여넣음)
   document.addEventListener('paste', (e) => {
     const items = e.clipboardData && e.clipboardData.items;
     if(!items) return;
+    const manager = currentTab === 'item' ? itemManager : receiptManager;
     let found = false;
     for(const item of items){
       if(item.type.startsWith('image/')){
         const file = item.getAsFile();
         if(file){
-          const url = URL.createObjectURL(file);
-          images.push({url});
+          manager.addFromFile(file);
           found = true;
         }
       }
     }
-    if(found){ e.preventDefault(); renderImages(); }
+    if(found){ e.preventDefault(); }
   });
 
+  // 카드사용확인서 탭: 클릭/파일첨부
   receiptEmpty.addEventListener('click', () => $('fileInput').click());
   $('addInlineBtn').addEventListener('click', () => $('fileInput').click());
-
-  // 파일 선택 버튼
   $('addPhotoBtn').addEventListener('click', () => $('fileInput').click());
   $('fileInput').addEventListener('change', (e) => {
-    addFiles(e.target.files);
+    receiptManager.addFiles(e.target.files);
     e.target.value = '';
   });
 
-  // 드래그 앤 드롭
-  ['dragover','dragenter'].forEach(ev => {
-    receiptZone.addEventListener(ev, (e) => {
-      e.preventDefault();
-      receiptZone.classList.add('drag-over');
+  // 물품사진 탭: 클릭/파일첨부
+  itemEmpty.addEventListener('click', () => $('fileInputItem').click());
+  $('addInlineBtnItem').addEventListener('click', () => $('fileInputItem').click());
+  $('fileInputItem').addEventListener('change', (e) => {
+    itemManager.addFiles(e.target.files);
+    e.target.value = '';
+  });
+
+  // 드래그 앤 드롭 (두 영역 각각)
+  function wireDragDrop(zoneEl, manager){
+    ['dragover','dragenter'].forEach(ev => {
+      zoneEl.addEventListener(ev, (e) => {
+        e.preventDefault();
+        zoneEl.classList.add('drag-over');
+      });
     });
-  });
-  ['dragleave','drop'].forEach(ev => {
-    receiptZone.addEventListener(ev, (e) => {
-      e.preventDefault();
-      receiptZone.classList.remove('drag-over');
+    ['dragleave','drop'].forEach(ev => {
+      zoneEl.addEventListener(ev, (e) => {
+        e.preventDefault();
+        zoneEl.classList.remove('drag-over');
+      });
     });
-  });
-  receiptZone.addEventListener('drop', (e) => {
-    if(e.dataTransfer && e.dataTransfer.files.length){
-      addFiles(e.dataTransfer.files);
-    }
-  });
+    zoneEl.addEventListener('drop', (e) => {
+      if(e.dataTransfer && e.dataTransfer.files.length){
+        manager.addFiles(e.dataTransfer.files);
+      }
+    });
+  }
+  wireDragDrop(receiptZone, receiptManager);
+  wireDragDrop(itemZone, itemManager);
 
   $('printBtn').addEventListener('click', async () => {
     const btn = $('printBtn');
     const original = btn.textContent;
-    const docEl = $('document');
+    const docEl = currentTab === 'item' ? itemDocEl : cardDocEl;
     const snap = $('printSnapshot');
 
     if(typeof html2canvas !== 'function'){
@@ -934,8 +1049,7 @@
         useCORS: true,
         onclone: (clonedDoc) => {
           clonedDoc.querySelectorAll('.remove-btn, .resize-hint, .add-btn-inline').forEach(el => el.remove());
-          const emptyEl = clonedDoc.getElementById('receiptEmpty');
-          if(emptyEl) emptyEl.remove();
+          clonedDoc.querySelectorAll('.receipt-empty').forEach(el => el.remove());
         }
       });
       const dataUrl = canvas.toDataURL('image/png');
@@ -960,6 +1074,11 @@
   });
 
   $('resetBtn').addEventListener('click', () => {
+    if(currentTab === 'item'){
+      if(!confirm('붙여넣은 물품사진을 모두 지울까요?')) return;
+      itemManager.reset();
+      return;
+    }
     if(!confirm('입력한 내용과 붙여넣은 영수증을 모두 지울까요?')) return;
     fields.forEach(f => { $(f).value=''; $('pv-'+f).textContent=''; });
     $('amount').value = '';
@@ -967,8 +1086,7 @@
     $('periodStart').value = '';
     $('periodEnd').value = '';
     $('pv-period').textContent = '';
-    images = [];
-    renderImages();
+    receiptManager.reset();
   });
 
   // 사용법 안내 모달
@@ -982,7 +1100,8 @@
     if(e.key === 'Escape') guideOverlay.classList.remove('open');
   });
 
-  renderImages();
+  receiptManager.render();
+  itemManager.render();
 })();
 </script>
 
