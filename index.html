@@ -547,7 +547,21 @@
     <div class="row2">
       <div class="field">
         <label>부서</label>
-        <input type="text" id="dept" placeholder="예: 교무부">
+        <select id="dept">
+          <option value="" disabled selected>부서 선택</option>
+          <option value="교무기획부">교무기획부</option>
+          <option value="교육연구부">교육연구부</option>
+          <option value="학생생활안전부">학생생활안전부</option>
+          <option value="교육과정부">교육과정부</option>
+          <option value="미래교육기획부">미래교육기획부</option>
+          <option value="융합혁신부">융합혁신부</option>
+          <option value="교육정보부">교육정보부</option>
+          <option value="창의체험부">창의체험부</option>
+          <option value="1학년부">1학년부</option>
+          <option value="2학년부">2학년부</option>
+          <option value="3학년부">3학년부</option>
+          <option value="행정실">행정실</option>
+        </select>
       </div>
       <div class="field">
         <label>성명</label>
@@ -560,15 +574,27 @@
       <textarea id="content" placeholder="사용 내용을 입력하세요 (예: 학급 간식 구입)"></textarea>
     </div>
 
-    <div class="row2">
-      <div class="field">
-        <label>카드번호 (4자리)</label>
-        <input type="text" id="cardNo" maxlength="4" placeholder="0000">
+    <div class="field">
+      <label>카드번호 (4자리)</label>
+      <select id="cardNo">
+        <option value="" disabled selected>카드번호 선택</option>
+        <option value="8581">8581</option>
+        <option value="3588">3588</option>
+        <option value="8800">8800</option>
+        <option value="4596">4596</option>
+        <option value="2400">2400</option>
+        <option value="3639">3639</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>사용기간</label>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="date" id="periodStart" style="flex:1;">
+        <span style="color:#8b948e;font-size:12px;">~</span>
+        <input type="date" id="periodEnd" style="flex:1;">
       </div>
-      <div class="field">
-        <label>사용기간</label>
-        <input type="text" id="period" placeholder="예: 9.1 ~ 9.10">
-      </div>
+      <div style="font-size:11px;color:#8b948e;margin-top:4px;">하루만 사용했다면 종료일은 비워두세요</div>
     </div>
 
     <div class="field">
@@ -701,11 +727,35 @@
 (function(){
   const $ = (id) => document.getElementById(id);
 
-  const fields = ['dept','name','content','cardNo','period'];
+  const fields = ['dept','name','content','cardNo'];
   fields.forEach(f => {
-    $(f).addEventListener('input', () => {
-      $('pv-' + f).textContent = $(f).value;
-    });
+    const el = $(f);
+    const sync = () => { $('pv-' + f).textContent = el.value; };
+    el.addEventListener('input', sync);
+    el.addEventListener('change', sync);
+  });
+
+  // 사용기간: 달력에서 시작일/종료일을 고르면 자동으로 문서에 표시
+  function formatDateKR(dateStr){
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return `${y}.${m}.${d}`;
+  }
+  function updatePeriodPreview(){
+    const s = $('periodStart').value;
+    const e = $('periodEnd').value;
+    let text = '';
+    if(s && e && s !== e){
+      text = formatDateKR(s) + ' ~ ' + formatDateKR(e);
+    }else if(s){
+      text = formatDateKR(s);
+    }else if(e){
+      text = formatDateKR(e);
+    }
+    $('pv-period').textContent = text;
+  }
+  ['periodStart','periodEnd'].forEach(id => {
+    $(id).addEventListener('input', updatePeriodPreview);
+    $(id).addEventListener('change', updatePeriodPreview);
   });
 
   // 사용금액: 입력하는 동안 자동으로 천 단위 콤마를 붙여줌
@@ -914,6 +964,9 @@
     fields.forEach(f => { $(f).value=''; $('pv-'+f).textContent=''; });
     $('amount').value = '';
     $('pv-amount').textContent = '';
+    $('periodStart').value = '';
+    $('periodEnd').value = '';
+    $('pv-period').textContent = '';
     images = [];
     renderImages();
   });
