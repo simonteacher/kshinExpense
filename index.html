@@ -907,7 +907,7 @@
     const digits = $('amount').value.replace(/[^0-9]/g, '');
     const formatted = digits ? Number(digits).toLocaleString('ko-KR') : '';
     $('amount').value = formatted;
-    $('pv-amount').textContent = formatted;
+    $('pv-amount').textContent = formatted ? formatted + '원' : '';
   });
 
   $('schoolSelect').addEventListener('change', () => {
