@@ -295,8 +295,17 @@
     position:relative;
     flex:1 1 auto;
   }
-  .receipt-item{
+  .receipt-item-wrap{
     position:absolute;
+  }
+  .receipt-item-wrap.dragging{
+    z-index:50;
+  }
+  .receipt-item-wrap.dragging .receipt-item{
+    opacity:0.85;
+    box-shadow:0 4px 14px rgba(0,0,0,0.22);
+  }
+  .receipt-item{
     border:1px solid #ccc;
     background:#fafafa;
     width:220px;
@@ -312,11 +321,6 @@
     user-select:none;
     page-break-inside:avoid;
     break-inside:avoid;
-  }
-  .receipt-item.dragging{
-    opacity:0.85;
-    box-shadow:0 4px 14px rgba(0,0,0,0.22);
-    z-index:50;
   }
   .receipt-item img{
     width:100%;
@@ -350,6 +354,37 @@
     color:#aaa;
     pointer-events:none;
     letter-spacing:-1px;
+  }
+  .rotate-handle{
+    position:absolute;
+    top:-28px;
+    left:50%;
+    transform:translateX(-50%);
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:#fff;
+    border:1px solid var(--accent);
+    color:var(--accent-dark);
+    font-size:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:grab;
+    z-index:3;
+    user-select:none;
+    touch-action:none;
+  }
+  .rotate-handle:active{cursor:grabbing;}
+  .rotate-handle::after{
+    content:'';
+    position:absolute;
+    top:22px;
+    left:50%;
+    width:1px;
+    height:9px;
+    background:#bbb;
+    transform:translateX(-50%);
   }
   .receipt-label-row{
     display:flex;
@@ -401,7 +436,7 @@
 
   @media print{
     body{background:#fff;}
-    .panel, .toolbar, .remove-btn, .receipt-empty, .add-btn-inline, .resize-hint{display:none !important;}
+    .panel, .toolbar, .remove-btn, .receipt-empty, .add-btn-inline, .resize-hint, .rotate-handle{display:none !important;}
     .receipt-item{resize:none !important; border-color:#ddd;}
     .preview-wrap{padding:0; display:block;}
     .document{
@@ -433,16 +468,77 @@
     .document{width:100%;min-height:auto;}
   }
 
-  #printSnapshot{display:none;}
+  #printPages{display:none;}
   @media print{
     body.print-mode .app{display:none !important;}
-    body.print-mode #printSnapshot{
+    body.print-mode #printPages{
       display:block !important;
+    }
+    #printPages img{
       width:210mm;
       height:297mm;
       object-fit:contain;
-      margin:0;
+      display:block;
     }
+    #printPages img:not(:last-child){
+      page-break-after:always;
+    }
+  }
+
+  .page-pips{
+    width:210mm;
+    max-width:100%;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-bottom:14px;
+    flex-wrap:wrap;
+  }
+  .page-pip{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    padding:5px 10px;
+    border-radius:14px;
+    border:1px solid #c8cfcb;
+    background:#fff;
+    color:var(--muted);
+    font-size:12.5px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .page-pip.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+  }
+  .page-pip .pip-del{
+    border:none;
+    background:transparent;
+    color:inherit;
+    font-size:11px;
+    line-height:1;
+    cursor:pointer;
+    padding:0;
+    opacity:0.75;
+  }
+  .page-pip .pip-del:hover{opacity:1;}
+  .page-pip-add{
+    padding:5px 12px;
+    border-radius:14px;
+    border:1px dashed var(--accent);
+    background:#fff;
+    color:var(--accent-dark);
+    font-size:12.5px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .page-pip-add:hover{background:#f0f6f3;}
+
+  @media print{
+    .page-pips{display:none !important;}
   }
 
   /* ---------- 사용법 안내 ---------- */
@@ -640,15 +736,6 @@
     </div>
 
     <hr class="divider">
-
-    <div class="hint-box">
-      <b>영수증 붙여넣기</b><br>
-      캡쳐한 영수증 이미지를 복사한 뒤, 오른쪽 문서의 영수증 부착란을 클릭하고 <b>Ctrl+V</b>(맥 ⌘+V)를 누르면 바로 붙여넣어져요. 여러 장도 계속 붙여넣을 수 있어요.
-    </div>
-
-    <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
-    <button class="add-photo-btn" id="addPhotoBtn">📎 영수증 이미지 파일로 추가</button>
-    <div class="count-line">현재 첨부: <span id="countLabel">0</span>장 (자동 계산됨)</div>
   </aside>
 
   <!-- 오른쪽 미리보기 -->
@@ -663,6 +750,8 @@
         <button class="btn btn-print" id="printBtn">🖨 인쇄 / PDF 저장</button>
       </div>
     </div>
+
+    <div class="page-pips" id="pagePips"></div>
 
     <div class="document" id="document">
       <h2 class="doc-title">카드사용확인서</h2>
@@ -692,12 +781,9 @@
       </table>
 
       <div class="receipt-zone" id="receiptZone">
-        <div class="receipt-label-row">
-          <button class="add-btn-inline" id="addInlineBtn">+ 이미지 추가</button>
-        </div>
         <div class="receipt-grid" id="receiptGrid"></div>
         <div class="receipt-empty" id="receiptEmpty">
-          클릭해서 파일 첨부<br>또는 Ctrl+V로 붙여넣기<br>또는 이미지를 끌어다 놓으세요
+          (이미지 첨부 기능은 제공되지 않습니다)
         </div>
       </div>
 
@@ -722,7 +808,7 @@
 
 <input type="file" id="fileInputItem" accept="image/*" multiple style="display:none">
 
-<img id="printSnapshot" alt="카드사용확인서 인쇄 미리보기">
+<div id="printPages"></div>
 
 <div class="guide-overlay" id="guideOverlay">
   <div class="guide-modal">
@@ -741,45 +827,32 @@
     <div class="guide-step">
       <div class="num">2</div>
       <div class="body">
-        <h3>영수증 사진 붙이기 (3가지 방법 중 편한 걸로)</h3>
-        <ul>
-          <li>오른쪽 문서의 영수증 부착란을 <b>클릭</b>하면 파일 선택창이 열려요.</li>
-          <li>영수증을 캡쳐/복사한 뒤 <b>Ctrl+V</b>(맥은 ⌘+V)로 바로 붙여넣을 수 있어요.</li>
-          <li>사진 파일을 마우스로 <b>끌어다 놓아도</b> 돼요.</li>
-        </ul>
-        <p>여러 장도 계속 추가할 수 있고, "영수증첨부 ○장"은 자동으로 계산돼요.</p>
-      </div>
-    </div>
-
-    <div class="guide-step">
-      <div class="num">3</div>
-      <div class="body">
-        <h3>영수증 위치·크기 조절하기</h3>
-        <p>붙인 영수증은 마우스로 눌러서 끌면 자유롭게 위치를 옮길 수 있고, 오른쪽 아래 모서리를 끌면 크기를 줄이거나 늘릴 수 있어요. 필요 없는 영수증은 오른쪽 위 ✕ 버튼으로 지우면 돼요.</p>
-      </div>
-    </div>
-
-    <div class="guide-step">
-      <div class="num">4</div>
-      <div class="body">
         <h3>인쇄 또는 PDF로 저장하기</h3>
         <p>오른쪽 위 <b>"🖨 인쇄 / PDF 저장"</b> 버튼을 누르면 잠깐 이미지를 준비한 뒤 인쇄창이 열려요. 별도 설정 없이 A4 한 장에 딱 맞게 인쇄돼요. 인쇄창에서 프린터 대신 "PDF로 저장"을 선택하면 파일로도 저장할 수 있어요.</p>
       </div>
     </div>
 
     <div class="guide-step">
-      <div class="num">5</div>
+      <div class="num">3</div>
       <div class="body">
-        <h3>물품사진도 함께 출력하고 싶다면</h3>
-        <p>화면 위쪽의 <b>"물품사진"</b> 탭을 누르면 별도 페이지가 나와요. 카드 영수증과 똑같은 방법(클릭/붙여넣기/드래그)으로 물품 사진을 넣고, 자유롭게 이동·크기 조절한 뒤 인쇄하면 돼요. "카드사용확인서" 탭으로 다시 돌아가면 원래 서식이 그대로 남아있어요.</p>
+        <h3>물품사진이 많아서 한 페이지에 다 안 들어갈 때</h3>
+        <p>물품사진 탭 위쪽에 있는 <b>"+ 페이지 추가"</b>를 누르면 새 페이지가 하나 더 생겨요. 페이지 이름을 눌러 오가며 사진을 나눠 붙일 수 있고, 인쇄하면 모든 페이지가 순서대로 함께 인쇄돼요. 필요 없는 페이지는 옆의 ✕로 지울 수 있어요 (최소 1페이지는 항상 남아있어요).</p>
       </div>
     </div>
 
     <div class="guide-step">
-      <div class="num">6</div>
+      <div class="num">4</div>
+      <div class="body">
+        <h3>물품사진도 함께 출력하고 싶다면</h3>
+        <p>화면 위쪽의 <b>"물품사진"</b> 탭을 누르면 별도 페이지가 나와요. 물품 사진을 <b>클릭해서 파일 첨부 / Ctrl+V 붙여넣기 / 드래그</b>로 넣고, 자유롭게 이동·크기 조절·회전(사진 위 ⟳ 손잡이)한 뒤 인쇄하면 돼요. "카드사용확인서" 탭으로 다시 돌아가면 원래 서식이 그대로 남아있어요.</p>
+      </div>
+    </div>
+
+    <div class="guide-step">
+      <div class="num">5</div>
       <div class="body">
         <h3>다시 작성하고 싶을 때</h3>
-        <p>오른쪽 위 <b>"초기화"</b> 버튼을 누르면, 지금 보고 있는 탭의 내용만 지워져요. (카드사용확인서 탭이면 입력 내용+영수증, 물품사진 탭이면 물품 사진만)</p>
+        <p>오른쪽 위 <b>"초기화"</b> 버튼을 누르면, 카드사용확인서 탭에서는 입력한 내용이, 물품사진 탭에서는 지금 보고 있는 페이지의 사진이 지워져요.</p>
       </div>
     </div>
 
@@ -837,18 +910,22 @@
   });
 
   // ---------- 이미지(영수증/물품사진) 관리 공통 로직 ----------
-  function createImageManager({ gridEl, emptyEl, onCountChange }){
+  function createImageManager({ gridEl, emptyEl, onCountChange, isEnabled }){
     let images = []; // {url, w, h, x, y}
 
     function render(){
       gridEl.innerHTML = '';
       images.forEach((img, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'receipt-item-wrap';
+        wrap.style.left = (img.x != null ? img.x : (idx % 4) * 26) + 'px';
+        wrap.style.top = (img.y != null ? img.y : (idx % 4) * 26) + 'px';
+        wrap.style.transform = img.rot ? `rotate(${img.rot}deg)` : '';
+
         const item = document.createElement('div');
         item.className = 'receipt-item';
         item.style.width = (img.w || 220) + 'px';
         item.style.height = (img.h || 280) + 'px';
-        item.style.left = (img.x != null ? img.x : (idx % 4) * 26) + 'px';
-        item.style.top = (img.y != null ? img.y : (idx % 4) * 26) + 'px';
 
         const im = document.createElement('img');
         im.src = img.url;
@@ -869,6 +946,11 @@
         hint.className = 'resize-hint';
         hint.textContent = '⇲';
 
+        const rotHandle = document.createElement('div');
+        rotHandle.className = 'rotate-handle';
+        rotHandle.textContent = '⟳';
+        rotHandle.title = '드래그해서 회전';
+
         // 크기 조절(resize) 값을 기억해두기
         const ro = new ResizeObserver(entries => {
           for(const entry of entries){
@@ -878,7 +960,30 @@
         });
         ro.observe(item);
 
-        // 드래그로 위치 이동
+        // 회전 핸들을 끌어서 각도 조절 (wrap 기준으로 회전)
+        let rotating = false, rotCenterX = 0, rotCenterY = 0, rotStartAngle = 0, rotBase = 0;
+        rotHandle.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          rotating = true;
+          const rect = wrap.getBoundingClientRect();
+          rotCenterX = rect.left + rect.width / 2;
+          rotCenterY = rect.top + rect.height / 2;
+          rotStartAngle = Math.atan2(e.clientY - rotCenterY, e.clientX - rotCenterX) * 180 / Math.PI;
+          rotBase = img.rot || 0;
+          rotHandle.setPointerCapture(e.pointerId);
+        });
+        rotHandle.addEventListener('pointermove', (e) => {
+          if(!rotating) return;
+          const angle = Math.atan2(e.clientY - rotCenterY, e.clientX - rotCenterX) * 180 / Math.PI;
+          let newRot = rotBase + (angle - rotStartAngle);
+          img.rot = Math.round(newRot);
+          wrap.style.transform = `rotate(${img.rot}deg)`;
+        });
+        const endRotate = () => { rotating = false; };
+        rotHandle.addEventListener('pointerup', endRotate);
+        rotHandle.addEventListener('pointercancel', endRotate);
+
+        // 드래그로 위치 이동 (wrap의 위치를 옮김)
         let dragging = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
         item.addEventListener('pointerdown', (e) => {
           const rect = item.getBoundingClientRect();
@@ -887,24 +992,24 @@
           dragging = true;
           startX = e.clientX;
           startY = e.clientY;
-          baseLeft = item.offsetLeft;
-          baseTop = item.offsetTop;
-          item.classList.add('dragging');
+          baseLeft = wrap.offsetLeft;
+          baseTop = wrap.offsetTop;
+          wrap.classList.add('dragging');
           item.setPointerCapture(e.pointerId);
         });
         item.addEventListener('pointermove', (e) => {
           if(!dragging) return;
           const newLeft = Math.max(0, baseLeft + (e.clientX - startX));
           const newTop = Math.max(0, baseTop + (e.clientY - startY));
-          item.style.left = newLeft + 'px';
-          item.style.top = newTop + 'px';
+          wrap.style.left = newLeft + 'px';
+          wrap.style.top = newTop + 'px';
           img.x = newLeft;
           img.y = newTop;
         });
         const endDrag = () => {
           if(!dragging) return;
           dragging = false;
-          item.classList.remove('dragging');
+          wrap.classList.remove('dragging');
         };
         item.addEventListener('pointerup', endDrag);
         item.addEventListener('pointercancel', endDrag);
@@ -912,7 +1017,9 @@
         item.appendChild(im);
         item.appendChild(rm);
         item.appendChild(hint);
-        gridEl.appendChild(item);
+        wrap.appendChild(item);
+        wrap.appendChild(rotHandle);
+        gridEl.appendChild(wrap);
       });
 
       emptyEl.style.display = images.length === 0 ? 'flex' : 'none';
@@ -920,6 +1027,7 @@
     }
 
     function addFiles(fileList){
+      if(isEnabled && !isEnabled()) return;
       Array.from(fileList).forEach(file => {
         if(!file.type.startsWith('image/')) return;
         const url = URL.createObjectURL(file);
@@ -929,6 +1037,7 @@
     }
 
     function addFromFile(file){
+      if(isEnabled && !isEnabled()) return;
       const url = URL.createObjectURL(file);
       images.push({url});
       render();
@@ -945,14 +1054,13 @@
   const receiptGrid = $('receiptGrid');
   const receiptEmpty = $('receiptEmpty');
   const receiptZone = $('receiptZone');
-  const countLabel = $('countLabel');
   const pvCount = $('pv-count');
 
   const receiptManager = createImageManager({
     gridEl: receiptGrid,
     emptyEl: receiptEmpty,
+    isEnabled: () => false,
     onCountChange: (n) => {
-      countLabel.textContent = n;
       pvCount.innerHTML = n + '<span class="unit-suffix">장</span>';
     }
   });
@@ -962,59 +1070,7 @@
   const itemZone = $('itemZone');
   const itemManager = createImageManager({ gridEl: itemGrid, emptyEl: itemEmpty });
 
-  // ---------- 탭 전환 (카드사용확인서 / 물품사진) ----------
-  let currentTab = 'card';
-  const cardDocEl = $('document');
-  const itemDocEl = $('itemDoc');
-  const tabCardBtn = $('tabCardBtn');
-  const tabItemBtn = $('tabItemBtn');
-
-  function setTab(tab){
-    currentTab = tab;
-    tabCardBtn.classList.toggle('active', tab === 'card');
-    tabItemBtn.classList.toggle('active', tab === 'item');
-    cardDocEl.style.display = tab === 'card' ? '' : 'none';
-    itemDocEl.style.display = tab === 'item' ? '' : 'none';
-  }
-  tabCardBtn.addEventListener('click', () => setTab('card'));
-  tabItemBtn.addEventListener('click', () => setTab('item'));
-
-  // 붙여넣기 (문서 전체에서 감지, 현재 활성화된 탭에 붙여넣음)
-  document.addEventListener('paste', (e) => {
-    const items = e.clipboardData && e.clipboardData.items;
-    if(!items) return;
-    const manager = currentTab === 'item' ? itemManager : receiptManager;
-    let found = false;
-    for(const item of items){
-      if(item.type.startsWith('image/')){
-        const file = item.getAsFile();
-        if(file){
-          manager.addFromFile(file);
-          found = true;
-        }
-      }
-    }
-    if(found){ e.preventDefault(); }
-  });
-
-  // 카드사용확인서 탭: 클릭/파일첨부
-  receiptEmpty.addEventListener('click', () => $('fileInput').click());
-  $('addInlineBtn').addEventListener('click', () => $('fileInput').click());
-  $('addPhotoBtn').addEventListener('click', () => $('fileInput').click());
-  $('fileInput').addEventListener('change', (e) => {
-    receiptManager.addFiles(e.target.files);
-    e.target.value = '';
-  });
-
-  // 물품사진 탭: 클릭/파일첨부
-  itemEmpty.addEventListener('click', () => $('fileInputItem').click());
-  $('addInlineBtnItem').addEventListener('click', () => $('fileInputItem').click());
-  $('fileInputItem').addEventListener('change', (e) => {
-    itemManager.addFiles(e.target.files);
-    e.target.value = '';
-  });
-
-  // 드래그 앤 드롭 (두 영역 각각)
+  // 드래그 앤 드롭 연결
   function wireDragDrop(zoneEl, manager){
     ['dragover','dragenter'].forEach(ev => {
       zoneEl.addEventListener(ev, (e) => {
@@ -1034,14 +1090,195 @@
       }
     });
   }
+
+  // 카드사용확인서 탭: 이미지 첨부 기능이 제공되지 않음 (드래그앤드롭은 걸어두되 addFiles 내부에서 차단됨)
   wireDragDrop(receiptZone, receiptManager);
+
+  // 물품사진 탭 1페이지: 클릭/파일첨부
+  itemEmpty.addEventListener('click', () => $('fileInputItem').click());
+  $('addInlineBtnItem').addEventListener('click', () => $('fileInputItem').click());
+  $('fileInputItem').addEventListener('change', (e) => {
+    itemManager.addFiles(e.target.files);
+    e.target.value = '';
+  });
   wireDragDrop(itemZone, itemManager);
+
+  // ---------- 탭 & 여러 페이지 관리 ----------
+  let currentTab = 'card';
+  const tabCardBtn = $('tabCardBtn');
+  const tabItemBtn = $('tabItemBtn');
+  const previewWrap = document.querySelector('.preview-wrap');
+  const pagePipsEl = $('pagePips');
+
+  const pagesByTab = {
+    card: [{ el: $('document'), manager: receiptManager }],
+    item: [{ el: $('itemDoc'), manager: itemManager }]
+  };
+  const currentPageIndex = { card: 0, item: 0 };
+
+  function createExtraPageEl(tab, pageNumber){
+    const el = document.createElement('div');
+    el.className = 'document';
+    el.style.display = 'none';
+
+    const title = tab === 'item'
+      ? `물품 사진 (${pageNumber}페이지)`
+      : `카드사용확인서 - 영수증 추가 (${pageNumber}페이지)`;
+
+    el.innerHTML = tab === 'card'
+      ? '<h2 class="doc-title"></h2>' +
+        '<div class="receipt-zone item-zone">' +
+          '<div class="receipt-grid"></div>' +
+          '<div class="receipt-empty">(이미지 첨부 기능은 제공되지 않습니다)</div>' +
+        '</div>'
+      : '<h2 class="doc-title"></h2>' +
+        '<div class="receipt-zone item-zone">' +
+          '<div class="receipt-label-row">' +
+            '<button type="button" class="add-btn-inline">+ 사진 추가</button>' +
+          '</div>' +
+          '<div class="receipt-grid"></div>' +
+          '<div class="receipt-empty">클릭해서 파일 첨부<br>또는 Ctrl+V로 붙여넣기<br>또는 이미지를 끌어다 놓으세요</div>' +
+        '</div>';
+
+    el.querySelector('.doc-title').textContent = title;
+    const zoneEl = el.querySelector('.receipt-zone');
+    const gridEl = el.querySelector('.receipt-grid');
+    const emptyEl = el.querySelector('.receipt-empty');
+    const addBtn = el.querySelector('.add-btn-inline');
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.multiple = true;
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    const manager = createImageManager({
+      gridEl,
+      emptyEl,
+      isEnabled: tab === 'card' ? (() => false) : undefined
+    });
+
+    if(tab !== 'card'){
+      emptyEl.addEventListener('click', () => fileInput.click());
+      addBtn.addEventListener('click', () => fileInput.click());
+    }
+    fileInput.addEventListener('change', (e) => {
+      manager.addFiles(e.target.files);
+      e.target.value = '';
+    });
+    wireDragDrop(zoneEl, manager);
+
+    previewWrap.appendChild(el);
+    manager.render();
+    return { el, manager };
+  }
+
+  function applyVisibility(){
+    ['card','item'].forEach(tab => {
+      pagesByTab[tab].forEach((p, idx) => {
+        const visible = (tab === currentTab) && (idx === currentPageIndex[tab]);
+        p.el.style.display = visible ? '' : 'none';
+      });
+    });
+  }
+
+  function renderPagePips(){
+    const pages = pagesByTab[currentTab];
+    pagePipsEl.innerHTML = '';
+    pages.forEach((p, idx) => {
+      const pip = document.createElement('button');
+      pip.type = 'button';
+      pip.className = 'page-pip' + (idx === currentPageIndex[currentTab] ? ' active' : '');
+
+      const label = document.createElement('span');
+      label.textContent = (idx + 1) + '페이지';
+      pip.appendChild(label);
+
+      if(pages.length > 1){
+        const del = document.createElement('span');
+        del.className = 'pip-del';
+        del.textContent = '✕';
+        del.title = '이 페이지 삭제';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removePage(currentTab, idx);
+        });
+        pip.appendChild(del);
+      }
+
+      pip.addEventListener('click', () => switchPage(currentTab, idx));
+      pagePipsEl.appendChild(pip);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'page-pip-add';
+    addBtn.textContent = '+ 페이지 추가';
+    addBtn.addEventListener('click', () => addPage(currentTab));
+    pagePipsEl.appendChild(addBtn);
+  }
+
+  function switchPage(tab, index){
+    currentPageIndex[tab] = index;
+    applyVisibility();
+    renderPagePips();
+  }
+
+  function addPage(tab){
+    const pages = pagesByTab[tab];
+    const pageNumber = pages.length + 1;
+    const page = createExtraPageEl(tab, pageNumber);
+    pages.push(page);
+    currentPageIndex[tab] = pages.length - 1;
+    applyVisibility();
+    renderPagePips();
+  }
+
+  function removePage(tab, index){
+    const pages = pagesByTab[tab];
+    if(pages.length <= 1) return;
+    if(!confirm('이 페이지를 삭제할까요? 페이지 안의 사진도 함께 사라져요.')) return;
+    const [removed] = pages.splice(index, 1);
+    removed.el.remove();
+    if(currentPageIndex[tab] >= pages.length) currentPageIndex[tab] = pages.length - 1;
+    applyVisibility();
+    renderPagePips();
+  }
+
+  function setTab(tab){
+    currentTab = tab;
+    tabCardBtn.classList.toggle('active', tab === 'card');
+    tabItemBtn.classList.toggle('active', tab === 'item');
+    applyVisibility();
+    renderPagePips();
+  }
+  tabCardBtn.addEventListener('click', () => setTab('card'));
+  tabItemBtn.addEventListener('click', () => setTab('item'));
+
+  // 붙여넣기 (문서 전체에서 감지, 현재 보고 있는 탭·페이지에 붙여넣음)
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    const manager = pagesByTab[currentTab][currentPageIndex[currentTab]].manager;
+    let found = false;
+    for(const item of items){
+      if(item.type.startsWith('image/')){
+        const file = item.getAsFile();
+        if(file){
+          manager.addFromFile(file);
+          found = true;
+        }
+      }
+    }
+    if(found){ e.preventDefault(); }
+  });
 
   $('printBtn').addEventListener('click', async () => {
     const btn = $('printBtn');
     const original = btn.textContent;
-    const docEl = currentTab === 'item' ? itemDocEl : cardDocEl;
-    const snap = $('printSnapshot');
+    const pages = pagesByTab[currentTab];
+    const printPagesEl = $('printPages');
 
     if(typeof html2canvas !== 'function'){
       window.print();
@@ -1049,27 +1286,39 @@
     }
 
     btn.disabled = true;
-    btn.textContent = '이미지 준비 중...';
+    printPagesEl.innerHTML = '';
+
     try{
-      const canvas = await html2canvas(docEl, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        onclone: (clonedDoc) => {
-          clonedDoc.querySelectorAll('.remove-btn, .resize-hint, .add-btn-inline').forEach(el => el.remove());
-          clonedDoc.querySelectorAll('.receipt-empty').forEach(el => el.remove());
-        }
-      });
-      const dataUrl = canvas.toDataURL('image/png');
-      await new Promise((resolve, reject) => {
-        snap.onload = resolve;
-        snap.onerror = reject;
-        snap.src = dataUrl;
-      });
+      for(let i = 0; i < pages.length; i++){
+        btn.textContent = pages.length > 1 ? `이미지 준비 중... (${i+1}/${pages.length})` : '이미지 준비 중...';
+        pages.forEach((p, idx) => { p.el.style.display = (idx === i) ? '' : 'none'; });
+        await new Promise(r => requestAnimationFrame(r));
+
+        const canvas = await html2canvas(pages[i].el, {
+          scale: 3,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          onclone: (clonedDoc) => {
+            clonedDoc.querySelectorAll('.remove-btn, .resize-hint, .add-btn-inline, .rotate-handle').forEach(el => el.remove());
+            clonedDoc.querySelectorAll('.receipt-empty').forEach(el => el.remove());
+          }
+        });
+
+        const img = document.createElement('img');
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = canvas.toDataURL('image/png');
+        });
+        printPagesEl.appendChild(img);
+      }
+
+      applyVisibility();
       document.body.classList.add('print-mode');
       window.print();
     }catch(err){
       console.error('스냅샷 생성 실패, 일반 인쇄로 진행합니다', err);
+      applyVisibility();
       window.print();
     }finally{
       btn.disabled = false;
@@ -1082,19 +1331,23 @@
   });
 
   $('resetBtn').addEventListener('click', () => {
-    if(currentTab === 'item'){
-      if(!confirm('붙여넣은 물품사진을 모두 지울까요?')) return;
-      itemManager.reset();
+    const idx = currentPageIndex[currentTab];
+    const manager = pagesByTab[currentTab][idx].manager;
+
+    if(currentTab === 'card' && idx === 0){
+      if(!confirm('입력한 내용과 붙여넣은 영수증을 모두 지울까요?')) return;
+      fields.forEach(f => { $(f).value=''; $('pv-'+f).textContent=''; });
+      $('amount').value = '';
+      $('pv-amount').textContent = '';
+      $('periodStart').value = '';
+      $('periodEnd').value = '';
+      $('pv-period').textContent = '';
+      manager.reset();
       return;
     }
-    if(!confirm('입력한 내용과 붙여넣은 영수증을 모두 지울까요?')) return;
-    fields.forEach(f => { $(f).value=''; $('pv-'+f).textContent=''; });
-    $('amount').value = '';
-    $('pv-amount').textContent = '';
-    $('periodStart').value = '';
-    $('periodEnd').value = '';
-    $('pv-period').textContent = '';
-    receiptManager.reset();
+
+    if(!confirm('이 페이지의 사진을 모두 지울까요?')) return;
+    manager.reset();
   });
 
   // 사용법 안내 모달
@@ -1110,6 +1363,7 @@
 
   receiptManager.render();
   itemManager.render();
+  setTab('card');
 })();
 </script>
 
