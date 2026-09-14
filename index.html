@@ -735,6 +735,11 @@
       <input type="text" id="amount" placeholder="예: 35,000">
     </div>
 
+    <div class="field">
+      <label>영수증 매수</label>
+      <input type="number" id="receiptCount" min="0" placeholder="0">
+    </div>
+
     <hr class="divider">
   </aside>
 
@@ -776,7 +781,7 @@
           <td class="label-cell label-left">사&nbsp;용&nbsp;금&nbsp;액</td>
           <td class="value-cell align-right" id="pv-amount"></td>
           <td class="label-cell">영수증첨부</td>
-          <td class="value-cell" id="pv-count">0<span class="unit-suffix">장</span></td>
+          <td class="value-cell" id="pv-count"></td>
         </tr>
       </table>
 
@@ -1059,10 +1064,13 @@
   const receiptManager = createImageManager({
     gridEl: receiptGrid,
     emptyEl: receiptEmpty,
-    isEnabled: () => false,
-    onCountChange: (n) => {
-      pvCount.innerHTML = n + '<span class="unit-suffix">장</span>';
-    }
+    isEnabled: () => false
+  });
+
+  // 영수증 매수는 직접 입력한 값을 그대로 표시
+  $('receiptCount').addEventListener('input', () => {
+    const n = $('receiptCount').value;
+    pvCount.innerHTML = n === '' ? '' : n + '<span class="unit-suffix">장</span>';
   });
 
   const itemGrid = $('itemGrid');
@@ -1335,13 +1343,15 @@
     const manager = pagesByTab[currentTab][idx].manager;
 
     if(currentTab === 'card' && idx === 0){
-      if(!confirm('입력한 내용과 붙여넣은 영수증을 모두 지울까요?')) return;
+      if(!confirm('입력한 내용을 모두 지울까요?')) return;
       fields.forEach(f => { $(f).value=''; $('pv-'+f).textContent=''; });
       $('amount').value = '';
       $('pv-amount').textContent = '';
       $('periodStart').value = '';
       $('periodEnd').value = '';
       $('pv-period').textContent = '';
+      $('receiptCount').value = '';
+      $('pv-count').innerHTML = '';
       manager.reset();
       return;
     }
